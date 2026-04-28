@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>クイズでわからせろ！</title>
+
+<style>
+body{
+    margin:0;
+    font-family:sans-serif;
+    background:#111;
+    color:white;
+    text-align:center;
+}
+
+/* ===== ぼかし ===== */
+#main{
+    filter: blur(6px);
+    pointer-events:none;
+}
+
+/* ===== スタート ===== */
+#start{
+    position:fixed;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.85);
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+}
+
+/* ===== ボタン ===== */
+button{
+    width:90%;
+    max-width:400px;
+    padding:18px;
+    font-size:18px;
+    border:none;
+    border-radius:12px;
+    margin:10px auto;
+    display:block;
+}
+
+/* ===== 選択肢 ===== */
+.choice{
+    background:#333;
+}
+.correct{ background:green !important; }
+.wrong{ background:red !important; }
+
+/* ===== 画面 ===== */
+#menu,#game{ display:none; padding:10px; }
+
+#question{ font-size:20px; margin:15px 0; }
+
+#image{
+    width:50%;
+    max-width:200px;
+    display:none;
+    margin:10px auto;
+}
+
+#timer{
+    margin-top:10px;
+    font-size:18px;
+}
+
+/* スマホ */
+@media (max-width:600px){
+    #question{ font-size:18px; }
+    button{ font-size:20px; padding:20px; }
+}
+</style>
+</head>
+
+<body>
+
+<!-- ===== スタート ===== -->
+<div id="start">
+    <h2>あなたは問題をとく自信がありますか？</h2>
+    <button onclick="firstChoice(true)">はい</button>
+    <button onclick="firstChoice(false)">いいえ</button>
+    <p id="startMsg"></p>
+</div>
+
+<div id="main">
+
+<!-- ===== 難易度 ===== -->
+<div id="menu">
+    <h2>難易度選択</h2>
+    <button onclick="startGame('easy')">かんたん</button>
+    <button id="normalBtn" disabled onclick="startGame('normal')">ふつう</button>
+    <button id="hardBtn" disabled onclick="startGame('hard')">むずかしい</button>
+</div>
+
+<!-- ===== ゲーム ===== -->
+<div id="game">
+    <img id="image">
+    <div id="question"></div>
+    <div id="choices"></div>
+    <div id="timer"></div>
+    <div id="score"></div>
+    <div id="miss"></div>
+    <button id="next">次へ</button>
+</div>
+
+</div>
+
+<script>
+// ===== 状態 =====
+let difficulty="easy";
+let score=0;
+let miss=0;
+let currentAnswer=0;
+
+// 解放（リロードでリセット）
+let unlocked={easy:true,normal:false,hard:false};
+
+// ===== タイマー =====
+let time=10;
+let timer;
+
+// ===== 問題 =====
+const quizData={
+easy:[
+ {q:"日本で一番高い山は？",c:["富士山","エベレスト山","北岳","赤岳"],a:0},
+ {q:"空の色は？",c:["赤","青","黒","白"],a:1},
+ {q:"アメリカの国旗の色は？",c:["赤、青、白","青、赤","黒、青、赤","白、青、"],a:0},
+ {q:"日本一小さい県は？",c:["大阪府","東京都","香川県","長崎県"],a:2},
+ {q:"世界一小さい国は？",c:["バチカン市国","モナコ","ツバル","ロシア"],a:0},
+ {q:"日本のプロ野球はセ・リーグとあと1つは何?",c:["サ・リーグ","ラ・リーガ","ナ・リーグ","パ・リーグ"],a:3},
+ {q:"太陽系で地球の次に内側の惑星は？",c:["火星","金星","水星","木星"],a:1},
+ {q:"非核三原則で定義されている3つの原則に含まれないものを答えよ",c:["持たず","作らず","持たせず","持ち込ませず"],a:2},
+ {q:"アメリカ大統領のフランクリン・ルーズベルトが世界恐慌への対策として行った経済政策は？",c:["ニューディール政策","ブロック経済","5か年計画","ルビー計画"],a:0},
+ {q:"日本神話において、日本列島を生み出した神といえば誰と誰？",c:["イザナギ、イザナミ","アマテラス、イザナミ","ツクヨミ、スサノオ","ヤマタノオロチ、オオクニヌシ"],a:0},
+ {q:"世界の大陸はいくつある？",c:["5つ","6つ","7つ","8つ"],a:1},
+ {q:"カエルは成長する前なんと言われている？",c:["オタマジャクシ","アメンボ","ミニケロッグ","いくら"],a:0},
+ {q:"いくらはなんの魚の卵？",c:["マグロ","タイ","サンマ","サケ"],a:3},
+ {q:"サーモンはなんの魚？",c:["タイ","イワシ","サケ","タラ"],a:2},
+ {q:"西は英語でなんと言う？",c:["north","east","west","south"],a:2},
+ {q:"お盆は何月何日？",c:["7月14日","7月16日","8月13日","8月15日"],a:3},
+ {q:"チキンはなんの肉？",c:["つばめ","ニワトリ","豚","羊"],a:1},
+ {q:"ラム肉はなんの肉？",c:["牛","ニワトリ","豚","羊"],a:3},
+ {q:"絵画「ひまわり」を描いた人物は？",c:["ゴッホ","ピカソ","モネ","ムンク"],a:0},
+ {q:"ツナ缶の中身は主に何が入っている？",c:["サケ","サバ","アジ","マグロ"],a:3},
+ {q:"日本で一番長い川は？",c:["信濃川","利根川","石狩川","荒川"],a:0},
+ {q:"日本で一番流域面積が広い川は？",c:["信濃川","利根川","石狩川","荒川"],a:1},
+ {q:"モネがよく描いたものは？",c:["山","スイレン","ひまわり","イタリアの風景画"],a:1},
+ {q:"絵画「モナリザ」を描いた人物は？",c:["レオナルド・ダ・ヴィンチ","マネ","フェルメール","ゴッホ"],a:0},
+ {q:"南アフリカ共和国初の黒人大統領となった人物は？",c:["デズモンド・ツツ","ネルソン・マンデラ","クリスチャン・バーナード","タボ・ムベキ"],a:1},
+ {q:"イタリアでファシスト党を組織して首相になった人物は？",c:["スターリン","ゴルバチョフ","ムッソリーニ","ヒトラー"],a:2},
+ {q:"世界で信者が多い宗教TOP3に含まれないものは？",c:["キリスト教","ヒンズー教","仏教","イスラム教"],a:2},
+ {q:"南アフリカ共和国初の黒人大統領となった人物は？",c:["デズモンド・ツツ","ネルソン・マンデラ","クリスチャン・バーナード","タボ・ムベキ"],a:1},
+
+
+],
+normal:[
+ {q:"岳の読み方は?",c:["おか","たけ","はく","きよざみ"],a:2},
+ {q:"エジプトの一番大きいピラミッドを立てた人物は？",c:["クフ王","ラムセス２世","メンカウラー王","ツタンカーメン"],a:2},
+ {q:"ドレミファソラシドは、何語？",c:["ドイツ語","ギリシャ語","オーストラリア語","イタリア語"],a:3},
+ {q:"ラグビーは何人制のスポーツ？",c:["10","13","15","17"],a:2},
+ {q:"福沢諭吉が創設した学校は？",c:["早稲田大学","慶應義塾大学","東京大学","明治大学"],a:1},
+ 
+],
+hard:[
+ {q:"日本の国鳥は？",c:["ハト","キジ","ウグイス","ツバメ"],a:1},
+ {q:"いろはにほへとの「は」に対応している音は次のうちどれ？",c:["ド","レ","ミ","ファ"],a:0},
+
+]
+};
+
+// ===== 音 =====
+function play(s){ new Audio(s).play(); }
+
+// ===== 最初 =====
+function firstChoice(ans){
+    const msg=document.getElementById("startMsg");
+
+    if(ans){
+        msg.textContent="クイズで確かめましょう！！";
+        setTimeout(()=>{
+            document.getElementById("start").style.display="none";
+            document.getElementById("main").style.filter="none";
+            document.getElementById("main").style.pointerEvents="auto";
+            document.getElementById("menu").style.display="block";
+        },1000);
+    }else{
+        msg.textContent="残念";
+    }
+}
+
+// ===== 開始 =====
+function startGame(diff){
+    difficulty=diff;
+    score=0;
+    miss=0;
+
+    document.getElementById("menu").style.display="none";
+    document.getElementById("game").style.display="block";
+
+    nextQuestion();
+}
+
+// ===== 問題 =====
+function nextQuestion(){
+    clearInterval(timer);
+
+    let list=quizData[difficulty];
+    let q=list[Math.floor(Math.random()*list.length)];
+
+    currentAnswer = q.a;
+
+    document.getElementById("question").textContent=q.q;
+
+    let div=document.getElementById("choices");
+    div.innerHTML="";
+
+    q.c.forEach((choice,i)=>{
+        let btn=document.createElement("button");
+        btn.className="choice";
+        btn.textContent=choice;
+        btn.onclick=()=>checkAnswer(i);
+        div.appendChild(btn);
+    });
+
+    document.getElementById("next").style.display="none";
+    updateUI();
+    startTimer();
+}
+
+// ===== タイマー =====
+function startTimer(){
+    time=10;
+    updateTimer();
+
+    timer=setInterval(()=>{
+        time--;
+        updateTimer();
+
+        if(time<=0){
+            clearInterval(timer);
+            timeUp();
+        }
+    },1000);
+}
+
+function updateTimer(){
+    let el=document.getElementById("timer");
+    el.textContent="残り: "+time;
+
+    if(time<=3){
+        el.style.color="red";
+    }else{
+        el.style.color="white";
+    }
+}
+
+// ===== 時間切れ =====
+function timeUp(){
+    let buttons=document.querySelectorAll(".choice");
+
+    buttons.forEach((b,i)=>{
+        b.disabled=true;
+        if(i===currentAnswer) b.classList.add("correct");
+    });
+
+    miss++;
+    play("wrong.mp3");
+
+    updateUI();
+
+    if(miss>=3){ gameOver(); return; }
+
+    document.getElementById("next").style.display="block";
+}
+
+// ===== 判定 =====
+function checkAnswer(i){
+    clearInterval(timer);
+
+    let buttons=document.querySelectorAll(".choice");
+
+    buttons.forEach((b,index)=>{
+        b.disabled=true;
+        if(index===currentAnswer) b.classList.add("correct");
+        if(index===i && i!==currentAnswer) b.classList.add("wrong");
+    });
+
+    if(i===currentAnswer){
+        score++;
+        play("correct.mp3");
+    }else{
+        miss++;
+        play("wrong.mp3");
+    }
+
+    updateUI();
+
+    if(miss>=3){ gameOver(); return; }
+    if(score>=30){ clearGame(); return; }
+
+    document.getElementById("next").style.display="block";
+}
+
+// ===== UI =====
+function updateUI(){
+    document.getElementById("score").textContent="スコア: "+score;
+    document.getElementById("miss").textContent="ミス: "+miss+"/3";
+
+    if(score>0 && score%5===0){
+        let img=document.getElementById("image");
+        img.src=difficulty+(score/5)+".png";
+        img.style.display="block";
+    }
+}
+
+// ===== 次へ =====
+document.getElementById("next").onclick=()=>{
+    nextQuestion();
+};
+
+// ===== クリア =====
+function clearGame(){
+    if(difficulty==="easy"){
+        unlocked.normal=true;
+        document.getElementById("normalBtn").disabled=false;
+    }
+    if(difficulty==="normal"){
+        unlocked.hard=true;
+        document.getElementById("hardBtn").disabled=false;
+    }
+
+    document.getElementById("game").innerHTML=
+    `<h2>クリア！</h2>
+    <p>30問正解！</p>
+    <button onclick="location.reload()">戻る</button>`;
+}
+
+// ===== ゲームオーバー =====
+function gameOver(){
+    document.getElementById("game").innerHTML=
+    `<h2>ゲームオーバー</h2>
+    <p>スコア:${score}</p>
+    <button onclick="location.reload()">もう一度</button>`;
+}
+</script>
+
+</body>
+</html>
