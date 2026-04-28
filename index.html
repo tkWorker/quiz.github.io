@@ -68,6 +68,10 @@ button{
     font-size:18px;
 }
 
+#next{
+    margin-bottom:15px;
+}
+
 /* スマホ */
 @media (max-width:600px){
     #question{ font-size:18px; }
@@ -99,12 +103,13 @@ button{
 <!-- ===== ゲーム ===== -->
 <div id="game">
     <img id="image">
+    <button id="next">次へ</button>
     <div id="question"></div>
     <div id="choices"></div>
     <div id="timer"></div>
     <div id="score"></div>
     <div id="miss"></div>
-    <button id="next">次へ</button>
+    
 </div>
 
 </div>
@@ -117,7 +122,11 @@ let miss=0;
 let currentAnswer=0;
 
 // 解放（リロードでリセット）
-let unlocked={easy:true,normal:false,hard:false};
+let unlocked = JSON.parse(localStorage.getItem("unlocked")) || {
+    easy:true,
+    normal:false,
+    hard:false
+};
 
 // ===== タイマー =====
 let time=10;
@@ -352,12 +361,15 @@ document.getElementById("next").onclick=()=>{
 function clearGame(){
     if(difficulty==="easy"){
         unlocked.normal=true;
-        document.getElementById("normalBtn").disabled=false;
     }
     if(difficulty==="normal"){
         unlocked.hard=true;
-        document.getElementById("hardBtn").disabled=false;
     }
+
+    // ⭐ここ追加（保存）
+    localStorage.setItem("unlocked", JSON.stringify(unlocked));
+
+    updateMenu();
 
     document.getElementById("game").innerHTML=
     `<h2>クリア！</h2>
@@ -372,6 +384,13 @@ function gameOver(){
     <p>スコア:${score}</p>
     <button onclick="location.reload()">もう一度</button>`;
 }
+
+function updateMenu(){
+    document.getElementById("normalBtn").disabled = !unlocked.normal;
+    document.getElementById("hardBtn").disabled = !unlocked.hard;
+}
+
+updateMenu();
 </script>
 
 </body>
